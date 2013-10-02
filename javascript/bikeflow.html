@@ -26,10 +26,9 @@
       }
 	
       window.setInterval(function() {
-	$.getJSON( 'http://api.citybik.es/capitalbikeshare.json')
+	$.getJSON( 'http://api.citybik.es/capitalbikeshare.json?callback=dojsonp')
 	  .done(function(msg) {
-
-	var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
+	  var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
 	  bikesAcc = 0, docksAcc = 0;
 	var R, dLat, dLon, a, c, d;
 
