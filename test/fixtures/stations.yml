@@ -1,0 +1,19 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/Fixtures.html
+
+one:
+  stationId: MyString
+  stationName: MyString
+  lat: 1
+  lng: 1
+  bikes: 1
+  docks: 1
+  timestamp: 2013-10-01 18:56:31
+
+two:
+  stationId: MyString
+  stationName: MyString
+  lat: 1
+  lng: 1
+  bikes: 1
+  docks: 1
+  timestamp: 2013-10-01 18:56:31
