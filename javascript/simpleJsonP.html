@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script class="jsonp"></script>
+
+    <script>
+    function insertMe() {
+      $.ajax({
+	  type: "GET",
+	  crossDomain: "true",
+	  mimeType: "text/javascript",
+	  url: "http://api.citybik.es/capitalbikeshare.json?callback=dojsonp"
+	}).done(function(msg) {
+	  + "$('id#json-result').text('success');"
+        }).fail(function() {
+	  $('id#json-result').text('failure');
+        });
+   }
+   $('script.jsonp').html(insertMe);
+   </script>
+  </head>
+  <body>
+    <script>
+    </script>
+    <div id="json-result"></div>
+  </body>
+</html>
