@@ -42,54 +42,110 @@
     <script type="text/javascript"
       src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAtozww5bfNzP-MXagYbLAr9gT6wTgHYdg&sensor=false">
     </script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script src="http://yui.yahooapis.com/3.12.0/build/yui/yui-min.js"></script>
+
     <script>
-    var maxBikes = 0, startCircle, map, bikeCenter, bikeTrack,
+    if (typeof Number.prototype.toRad == 'undefined') {
+      Number.prototype.toRad = function() {
+	return this * Math.PI / 180;
+      }
+    }
+    if (typeof Number.prototype.toDeg == 'undefined') {
+      Number.prototype.toDeg = function() {
+	return this * 180 / Math.PI;
+      }
+    }
+
+    systemName='capitalbikeshare';
+    YUI().use('node', 'jsonp', 'jsonp-url', function (Y) {
+      function prepareJSONPUrl(url, proxy, username) {
+	return Y.Lang.sub(url, {
+	  callback: proxy,
+	  name: systemName
+	});
+      }
+
+      function handleJSONPSuccess(data) {
+	var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
+	  bikesAcc = 0, docksAcc = 0;
+	var dLat, dLon, a, c, d;
+	var R = 6371 / 1.609344; // miles
+	var maxBikes = 0, startCircle, map, bikeCenter, bikeTrack,
 	  bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
-      if (typeof Number.prototype.toRad == 'undefined') {
-	Number.prototype.toRad = function() {
-	  return this * Math.PI / 180;
-	}
-      }
-      if (typeof Number.prototype.toDeg == 'undefined') {
-	Number.prototype.toDeg = function() {
-	  return this * 180 / Math.PI;
-	}
-      }
-    </script>
-     
-    <script type="text/javascript">
-      function initialize() {
-	var mapOptions = {
-	  center: new google.maps.LatLng(38.903, -77.034),
-	  zoom: 14,
-	  mapTypeId: google.maps.MapTypeId.ROADMAP
-	};
-	map = new google.maps.Map(document.getElementById("map-canvas"),
-	  mapOptions);
-	bikeTrack = new google.maps.MVCArray([
-	  new google.maps.LatLng(38.903, -77.035),
-	  new google.maps.LatLng(38.903, -77.035)
-	]);
-	startCircle = new google.maps.Circle({
-	  center: new google.maps.LatLng(38.897, -77.04),
-	  fillColor: '#000000',
-	  fillOpacity: 0.4,
-	  strokeColor: '#000000',
-	  strokeOpacity: 1.0,
-	  strokeWeight: 2,
-	  radius: 400
+	Y.Array.each(data, function(station,value){
+	    var bikes = station.bikes;
+		var docks = station.free;
+		bikesAcc += bikes;
+		bikeLatAccE6 += bikes * station.lat;
+		bikeLngAccE6 += bikes * station.lng;
+		docksAcc += docks;
+		dockLatAccE6 += docks * station.lat;
+		dockLngAccE6 += docks * station.lng;
+		bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
+		bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
+		dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
+		dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
+		dLat = 0;
+		dLng = 0;
+	  Y.one('#zero-two').set('text', bikesAcc);
+	  Y.one('#one-two').set('text', maxBikes);
+	  Y.one('#two-two').set('text', docksAcc);
+	  Y.one('#three-two').set('text', 'three-two');
 	});
-	bikeCenter = new google.maps.Polyline({
-	  path: bikeTrack,
-	  strokeColor: '#FF0000',
-	  strokeOpacity: 1.0,
-	  strokeWeight: 3
-	});
-	// startCircle.setMap(map);
-	bikeCenter.setMap(map);
-	}
-      google.maps.event.addDomListener(window, 'load', initialize);
+      }
+
+      function handleJSONPFailure() {
+      }
+
+      function handleJSONPTimeout() {
+      }
+
+      var url = 'http://api.citybik.es/{name}.json?callback={callback}';
+      var service = new Y.JSONPRequest(url, {
+	on: {
+	  success: handleJSONPSuccess,
+	  failure: handleJSONPFailure,
+	  timeout: handleJSONPTimeout
+	},
+	timeout: 5000,
+	format: prepareJSONPUrl
+      });
+      window.setInterval( function() {
+	service.send();
+      }, 3000);
+    });
+
+    function initialize() {
+      var mapOptions = {
+	center: new google.maps.LatLng(38.903, -77.034),
+	zoom: 14,
+	mapTypeId: google.maps.MapTypeId.ROADMAP
+      };
+      map = new google.maps.Map(document.getElementById("map-canvas"),
+	mapOptions);
+      bikeTrack = new google.maps.MVCArray([
+	new google.maps.LatLng(38.903, -77.035),
+	new google.maps.LatLng(38.903, -77.035)
+      ]);
+      startCircle = new google.maps.Circle({
+	center: new google.maps.LatLng(38.897, -77.04),
+	fillColor: '#000000',
+	fillOpacity: 0.4,
+	strokeColor: '#000000',
+	strokeOpacity: 1.0,
+	strokeWeight: 2,
+	radius: 400
+      });
+      bikeCenter = new google.maps.Polyline({
+	path: bikeTrack,
+	strokeColor: '#FF0000',
+	strokeOpacity: 1.0,
+	strokeWeight: 3
+      });
+      // startCircle.setMap(map);
+      bikeCenter.setMap(map);
+    }
+    google.maps.event.addDomListener(window, 'load', initialize);
     </script>
   </head>
   <body>
@@ -143,53 +199,6 @@
 	</div>
       </div>
     </div>
-    <script>
-      var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
-      bikesAcc = 0, docksAcc = 0;
-      var dLat, dLon, a, c, d;
-      var R = 6371 / 1.609344; // miles
-
-      window.setInterval(function() {
-	$.getJSON("http://api.citybik.es/capitalbikeshare.json?callback=?", {
-	    format: 'json'
-	  },
-	  function(data) {
-	    var dataString;
-	    bikesAcc = 0;
-	    bikeLatAccE6 = 0;
-	    bikeLngAccE6 = 0;
-	    docksAcc = 0;
-	    dockLatAccE6 = 0;
-	    dockLngAccE6 = 0;
-	    $.each(data, function(i,value){
-	      var bikes = value.bikes;
-	      var docks = value.free;
-	      bikesAcc += bikes;
-	      bikeLatAccE6 += bikes * value.lat;
-	      bikeLngAccE6 += bikes * value.lng;
-	      docksAcc += docks;
-	      dockLatAccE6 += docks * value.lat;
-	      dockLngAccE6 += docks * value.lng;
-	      bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
-	      bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
-	      dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
-	      dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
-	      dLat = 0;
-	      dLng = 0;
-	    });
-	    if (bikesAcc > maxBikes) {
-	      maxBikes = bikesAcc;
-	    }
-	    $('#zero-two').text(bikesAcc);
-	    $('#one-two').text(maxBikes);
-	    $('#two-two').text(docksAcc);
-	    $('#three-two').text( bikeLatAvgDeg.toFixed(3) +
-		  ', ' + bikeLngAvgDeg.toFixed(3));
-	    bikeTrack.push(new google.maps.LatLng(bikeLatAvgDeg,
-		  bikeLngAvgDeg));
-	  });
-      }, 20000);
-  </script>
   <div id="map-canvas"/>
 </body>
 </html>
