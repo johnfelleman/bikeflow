@@ -1,0 +1,65 @@
+    div.right-column {
+      border: solid #5667FF 1px;
+    }
+    div.map-block {
+    height:inherit;
+    }
+    #mapBox {
+      width: inherit;
+      height: 640px;
+    }
+    #left-column {
+      height: auto;
+      font-family: Verdana,Arial,sans-serif;
+      font-size: 13px;
+      margin: 0px;
+      padding: 0px;
+      border: solid #5667FF 1px;
+    }
+    .left-panel-block {
+      height: auto;
+      margin: 0px;
+      padding-top: 1px;
+      padding-bottom: 1px;
+      border-top: solid #5667FF 10px;
+      font-family: Verdana,Arial,sans-serif;
+      font-size: 14px;
+    }
+    .left-panel-block-contents {
+      margin:0em;
+      margin-left:1em;
+    }
+    .left-panel-block div .header {
+      margin:0px;
+      padding-bottom: 1px;
+      font-family: Arial,sans-serif;
+      font-size: 16px;
+    }
+    .left-panel-block div .header  h1 {
+      margin-left:3px;
+      font:lighter 17px "Century Gothic",sans-serif;
+      letter-spacing: 0px;
+    }
+    .left-panel-block div .content {
+      border: none;
+      font:lighter 13px Colibri,Helvetica,sans-serif;
+      letter-spacing: 0px;
+    }
+    .left-panel-block div .content  h3 {
+      font:lighter 15px "Century Gothic",sans-serif;
+      letter-spacing: 0px;
+    }
+    table#bike-data-table {
+       width: 20em;
+       margin-left: 2em;
+    }
+    table#bike-data-table tr td.bdt-left-cell {
+       border: none;
+       width: auto;
+       text-align: right;
+    }
+    table#bike-data-table tr td.bdt-right-cell {
+       border: solid #5667FF 1px;
+       width: auto;
+       font:normal 13px Courier,mono-space;
+    }

@@ -1,311 +1,69 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>bikeFLOW: Visualizing bike-sharing sites around the world</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
     <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/3.12.0/build/cssgrids-responsive/cssgrids-responsive-min.css">
-    <style type="text/css">
-    div.full-page {
-      height: auto;
-    }
-    #mapBox {
-      height: 616px;
-    }
-    #left-column {
-      height: auto;
-      font-family: Verdana,Arial,sans-serif;
-      font-size: 13px;
-      border: solid #5667FF 1px;
-    }
-    .left-panel-block {
-      height: auto;
-      padding-top: 3px;
-      padding-bottom: 3px;
-      border-top: solid #5667FF 10px;
-      font-family: Verdana,Arial,sans-serif;
-      font-size: 14px;
-    }
-    .left-panel-block div .header {
-      margin:0px;
-      padding-bottom: 1px;
-      font-family: Arial,sans-serif;
-      font-size: 16px;
-    }
-    .left-panel-block div .header  h1 {
-      margin-left:3px;
-      font:lighter 17px "Century Gothic",sans-serif;
-      letter-spacing: 0px;
-    }
-    .left-panel-block div .content {
-      border: none;
-      font:lighter 13px Colibri,Helvetica,sans-serif;
-      letter-spacing: 0px;
-    }
-    .left-panel-block div .content  h3 {
-      font:lighter 15px "Century Gothic",sans-serif;
-      letter-spacing: 0px;
-    }
-    table {
-       width: 80%;
-    }
-    td {
-       border: solid #5667FF 1px;
-       width: 50%;
-    }
-    </style>
+    <link rel="stylesheet" type="text/css" href="bikeflow.css">
     <script type="text/javascript"
     src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAtozww5bfNzP-MXagYbLAr9gT6wTgHYdg&sensor=false">
     </script>
     <script src="http://yui.yahooapis.com/3.12.0/build/yui/yui-min.js"></script>
-    <script>
-    // globals
-    var defaultSystemName='capitalbikeshare';
-    var map, mapOptions;
-    var bikeCenter, bikeTrack, settingsBox, userPos;
-    var selectedSystem = {
-      name: defaultSystemName,
-      lat: 1000000 * 38.903,
-      lng: 1000000 * -77.034
-    };
-
-    // Add some useful methods to Number
-    if (typeof Number.prototype.toRad == 'undefined') {
-      Number.prototype.toRad = function() {
-	return this * Math.PI / 180;
-      }
-    }
-    if (typeof Number.prototype.toDeg == 'undefined') {
-      Number.prototype.toDeg = function() {
-	return this * 180 / Math.PI;
-      }
-    }
-
-    // Functions to draw or redraw each box
-    function drawSettingsBox(Y, data) {
-      var settingsBoxContent = "";
-      if (navigator.geolocation) {
-	navigator.geolocation.getCurrentPosition(
-	  function(position) {
-	  settingsBoxContent += '<h3>Your location</h3>\n';
-	    userPos = new google.maps.LatLng(
-	      position.coords.latitude,
-	      position.coords.longitude);
-	  settingsBoxContent += '<p>' + position.coords.latitude + ', ' +
-		    position.coords.longitude + '</p>\n';
-	  },
-	  function showError(error) {
-	    switch(error.code) {
-	      case error.PERMISSION_DENIED:
-	      case error.POSITION_UNAVAILABLE:
-	      case error.TIMEOUT:
-	      case error.UNKNOWN_ERROR:
-	      userPos = new google.maps.LatLng( 90.0, 0.0);
-	      break;
-	    }
-	  });
-      } else {
-	userPos = new google.maps.LatLng( 90.0, 0.0);
-      }
-      var selectOption = Y.one('p select#system-list');
-      if (selectOption) {
-	selectedSystem = data[selectOption.get('value')];
-      }
-      settingsBoxContent += '<p>Bikeshare System \n<select id="system-list">\n';
-      Y.Array.each(data, function(system,value){
-	settingsBoxContent += '\t<option value="' + value + '" ' +
-	((system.name === selectedSystem.name) ? 'selected' : '') + '>' +
-	    system.name + '</option>\n';
-      });
-      settingsBoxContent += '</select>\n' +
-	     '<button id="change-system-button" type="button"' +
-	     'name="change-system" disabled>Change</button></p>' +
-	     '<p id="system-lat-lng"></p>\n';
-      Y.one('#settingsBox').
-	  setHTML(settingsBoxContent).
-	  one('p select#system-list').
-	  on('change', function() {
-	    this.siblings('button#change-system-button').
-	    removeAttribute('disabled').
-	    on('click', function() {
-	      this.setAttribute('disabled');
-	      drawSettingsBox(Y, data);
-	      drawMapBox(Y.one('#mapBox'));
-	    });
-	  });
-	  Y.one('p#system-lat-lng').setHTML('System coordinates: ' +
-		(0.000001 * selectedSystem.lat).toFixed(3) +
-		', ' + (0.000001 * selectedSystem.lng).toFixed(3));
-    }
-
-    function drawDataBox(Y, data) {
-      var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
-	bikesAcc = 0, docksAcc = 0;
-      var dLat, dLon, a, c, d;
-      var R = 6371 / 1.609344; // miles
-      var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
-      Y.Array.each(data, function(station,value){
-	var bikes = station.bikes;
-	var docks = station.free;
-	bikesAcc += bikes;
-	bikeLatAccE6 += bikes * station.lat;
-	bikeLngAccE6 += bikes * station.lng;
-	docksAcc += docks;
-	dockLatAccE6 += docks * station.lat;
-	dockLngAccE6 += docks * station.lng;
-	bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
-	bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
-	dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
-	dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
-	dLat = 0;
-	dLng = 0;
-      });
-      if (bikesAcc > maxBikes) {
-	maxBikes = bikesAcc;
-      }
-      Y.one('#zero-two').set('text', bikesAcc);
-      Y.one('#one-two').set('text', maxBikes);
-      Y.one('#two-two').set('text', docksAcc);
-      Y.one('#three-two').set('text', ( bikeLatAvgDeg.toFixed(3) +
-	  ', ' + bikeLngAvgDeg.toFixed(3)));
-      bikeTrack.push(new google.maps.LatLng(bikeLatAvgDeg,
-	  bikeLngAvgDeg));
-    }
-
-
-    function dontDrawMapBox(mapBox) {
-      if (!map) {
-      map = new google.maps.Map(document.getElementById("mapBox"), {
-	center: new google.maps.LatLng(38.9, -77.0),
-	zoom: 14,
-	mapTypeId: google.maps.MapTypeId.ROADMAP
-	});
-      }
-      map.setCenter(new google.maps.LatLng((0.000001 * selectedSystem.lat),
-					(0.000001 * selectedSystem.lng)));
-    }
-
-    function drawMapBox(mapBox) {
-      if (!map) {
-	map = new google.maps.Map(document.getElementById("mapBox"), {
-	  center: new google.maps.LatLng(38.9, -77.0),
-	  zoom: 14,
-	  mapTypeId: google.maps.MapTypeId.ROADMAP
-	});
-      }
-      map.setCenter(new google.maps.LatLng((0.000001 * selectedSystem.lat),
-					(0.000001 * selectedSystem.lng)));
-      
-      bikeTrack = new google.maps.MVCArray([
-	    new google.maps.LatLng((0.000001 * selectedSystem.lat),
-					(0.000001 * selectedSystem.lng)),
-	    new google.maps.LatLng((0.000001 * selectedSystem.lat),
-					(0.000001 * selectedSystem.lng))
-	    ]);
-      bikeCenter = new google.maps.Polyline({
-	path: bikeTrack,
-	strokeColor: '#FF0000',
-	strokeOpacity: 1.0,
-	strokeWeight: 3
-      });
-      bikeCenter.setMap(map);
-    }
-
-    function initialize() {
-      YUI().use('graphics', 'selector-css3', 'node', 'jsonp', 'jsonp-url', function (Y) {
-      
-    var mapBox = Y.one('#mapBox');
-    drawMapBox(mapBox);
-
-    function prepareJSONPUrl(url, proxy, username) {
-      return Y.Lang.sub(url, {
-	callback: proxy,
-	name: selectedSystem.name
-      });
-    }
-
-    function handleSystemList(data) {
-      drawSettingsBox(Y, data);
-    }
-
-    function handleSystemData(data) {
-      drawDataBox(Y, data);
-    }
-
-    function handleJSONPFailure() {
-    }
-
-    function handleJSONPTimeout() {
-    }
-
-      new Y.JSONPRequest('http://api.citybik.es/networks.json', {
-	on: {
-	  success: handleSystemList,
-	  failure: handleJSONPFailure,
-	  timeout: handleJSONPTimeout,
-	  type: 'text/javascript'
-	},
-	timeout: 5000
-      }).send();
-
-      var urlTemplate = 'http://api.citybik.es/{name}.json?callback={callback}';
-      var systemData = new Y.JSONPRequest(urlTemplate, {
-	on: {
-	  success: handleSystemData,
-	  failure: handleJSONPFailure,
-	  timeout: handleJSONPTimeout,
-	  type: 'text/javascript'
-	},
-	timeout: 5000,
-	format: prepareJSONPUrl
-      });
-      window.setInterval( function() {
-	systemData.send();
-      }, 10000);
-    });
-  }
-  google.maps.event.addDomListener(window, 'load', initialize);
-  </script>
+    <script src="bikeflow.js"></script>
   </head>
   <body>
     <div class="full-page yui3-g-r yui3-skin-sam">
     <div class="yui3-u-7-24" id="left-column">
       <div class="yui3-g-r left-column-inner-grid">
 	<div class="left-panel-block yui3-u-1-1">
-	  <div class="yui3-u-1-1" id="control">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="control">
 	    <div class="header">
 	      <h1>Settings</h1>
 	    </div>
-	    <div class="content" id="settingsBox"></div>
+	    <div class="content" id="settingsBox">
+	      <div id="user-location">
+		<h3>Your location</h3>
+		<p id="user-coordinates"></p>
+	      </div>
+	      <p>Bikeshare System
+		<select id="system-list"></select>
+		<button id="change-system-button" type="button" name="change-system" disabled>
+		  Change
+		</button>
+	      </p>
+	      <p id="system-lat-lng"></p>
+	    </div>
 	  </div>
 	</div>
 	<div class="left-panel-block yui3-u-1-1">
-	  <div class="yui3-u-1-1" id="report">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="report">
 	    <div class="header">
 	      <h1>Current Data</h1>
 	    </div>
 	    <div class="content">
-	      <table>
+	      <table id="bike-data-table">
 		<tr class="bike-row">
-		  <td class="bike-cell" id="zero-one">bikes</td>
-		  <td class="bike-cell" id="zero-two"></td>
+		  <td class="bdt-left-cell" id="zero-one">Bikes</td>
+		  <td class="bdt-right-cell" id="zero-two">0000</td>
 		</tr>
 		<tr class="bike-row">
-		  <td class="bike-cell" id="one-one">max bikes</td>
-		  <td class="bike-cell" id="one-two"></td>
+		  <td class="bdt-left-cell" id="one-one">Max bikes</td>
+		  <td class="bdt-right-cell" id="one-two">0000</td>
 		</tr>
 		  <tr class="bike-row">
-		    <td class="bike-cell" id="two-one">docks</td>
-		    <td class="bike-cell" id="two-two"></td>
+		    <td class="bdt-left-cell" id="two-one">Docks</td>
+		    <td class="bdt-right-cell" id="two-two">0000</td>
 		  </tr>
 		    <tr class="bike-row">
-		    <td class="bike-cell" id="three-one">center</td>
-		    <td class="bike-cell" id="three-two"></td>
+		    <td class="bdt-left-cell" id="three-one">Center</td>
+		    <td class="bdt-right-cell" id="three-two">??.???, ??.???</td>
 		  </tr>
 	      </table>
 	    </div>
 	  </div>
 	</div>
 	<div class="left-panel-block yui3-u-1-1">
-	  <div class="yui3-u-1-1" id="weathervane">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="about-box">
 	    <div class="header">
 	      <h1>About</h1>
 	    </div>
@@ -341,7 +99,14 @@
 	</div>
       </div>
     </div>
-    <div class="yui3-u-13-24" id="mapBox">
+    <div class="yui3-u-13-24 right-column">
+      <div class="yui3-g-r right-column-inner-grid">
+	<div class="map-block yui3-u-1-1">
+	  <div class="yui3-u-1-1" id="mapBox">
+	  </div>
+	</div>
+      </div>
     </div>
+  </div>
 </body>
 </html>
