@@ -21,12 +21,14 @@
 	      <h1>Settings</h1>
 	    </div>
 	    <div class="content" id="settingsBox">
-	      <div id="user-location">
+	      <div id="user-location" style="visibility:hidden">
 		<h3>Your location</h3>
 		<p id="user-coordinates"></p>
 	      </div>
 	      <p>Bikeshare System
-		<select id="system-list"></select>
+		<select id="system-list">
+		  <option value="0">loading...</option>
+		</select>
 		<button id="change-system-button" type="button" name="change-system" disabled>
 		  Change
 		</button>
