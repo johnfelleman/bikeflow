@@ -1,12 +1,19 @@
+    html, body {
+      height: 100%;
+    }
     div.right-column {
+      height: 100%;
       border: solid #5667FF 1px;
     }
     div.map-block {
-    height:inherit;
+    height: 100%;
     }
-    #mapBox {
+    #map_canvas {
       width: inherit;
       height: 640px;
+    }
+    #map_canvas img {
+      max-width: none;
     }
     #left-column {
       height: 640px;

@@ -270,7 +270,7 @@ function initialize() {
       });
     });
     
-    systemMap = new google.maps.Map(document.getElementById("mapBox"), {
+    systemMap = new google.maps.Map(document.getElementById("map_canvas"), {
       zoom: 14,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     });

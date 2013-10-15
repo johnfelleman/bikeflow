@@ -1,204 +1,178 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <title>bikeFLOW: Visualizing bike-sharing sites around the world</title>
     <meta name="viewport" content="initial-scale=1.0, user-scalable=no" />
-    <style type="text/css">
-      html {
-        height: 100%;
-	font-family: Verdana, Arial, sans-serif;
-      }
-      body { height: 100%; margin: 0; padding: 0 }
-      #map-canvas { height: 100% }
-      #left-panel {
-	float: left;
-	width: 300px;
-	height: 100%; 
-	background-color: #eeeeff;
-	border: 5px solid #aaaaff;
-      }
-      div.left-panel-block {
-        min-height: 100px;
-        border-bottom: 3px solid #aaaaff;
-	padding: 10px;
-      }
-      div.header {
-        padding: 0px;
-	background-color: white;
-	border-bottom: 1px solid #aaaaff;
-      }
-      div.header h1 {
-	font-size: 16px;
-      }
-      div.content  {
-      }
-      div.header p {
-	font-size: 12px;
-      }
-      .bike-cell {
-	border: 1px solid black;
-	margin: 0px;
-      }
-    </style>
+    <link rel="stylesheet" type="text/css" href="http://yui.yahooapis.com/3.12.0/build/cssgrids-responsive/cssgrids-responsive-min.css">
+    <link rel="stylesheet" type="text/css" href="bikeflow.css">
     <script type="text/javascript"
-      src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAtozww5bfNzP-MXagYbLAr9gT6wTgHYdg&sensor=false">
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAtozww5bfNzP-MXagYbLAr9gT6wTgHYdg&sensor=false">
     </script>
     <script src="http://yui.yahooapis.com/3.12.0/build/yui/yui-min.js"></script>
-
-    <script>
-    if (typeof Number.prototype.toRad == 'undefined') {
-      Number.prototype.toRad = function() {
-	return this * Math.PI / 180;
-      }
-    }
-    if (typeof Number.prototype.toDeg == 'undefined') {
-      Number.prototype.toDeg = function() {
-	return this * 180 / Math.PI;
-      }
-    }
-
-    systemName='capitalbikeshare';
-    YUI().use('node', 'jsonp', 'jsonp-url', function (Y) {
-      function prepareJSONPUrl(url, proxy, username) {
-	return Y.Lang.sub(url, {
-	  callback: proxy,
-	  name: systemName
-	});
-      }
-
-      function handleJSONPSuccess(data) {
-	var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
-	  bikesAcc = 0, docksAcc = 0;
-	var dLat, dLon, a, c, d;
-	var R = 6371 / 1.609344; // miles
-	var maxBikes = 0, startCircle, map, bikeCenter, bikeTrack,
-	  bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
-	Y.Array.each(data, function(station,value){
-	    var bikes = station.bikes;
-		var docks = station.free;
-		bikesAcc += bikes;
-		bikeLatAccE6 += bikes * station.lat;
-		bikeLngAccE6 += bikes * station.lng;
-		docksAcc += docks;
-		dockLatAccE6 += docks * station.lat;
-		dockLngAccE6 += docks * station.lng;
-		bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
-		bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
-		dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
-		dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
-		dLat = 0;
-		dLng = 0;
-	  Y.one('#zero-two').set('text', bikesAcc);
-	  Y.one('#one-two').set('text', maxBikes);
-	  Y.one('#two-two').set('text', docksAcc);
-	  Y.one('#three-two').set('text', 'three-two');
-	});
-      }
-
-      function handleJSONPFailure() {
-      }
-
-      function handleJSONPTimeout() {
-      }
-
-      var url = 'http://api.citybik.es/{name}.json?callback={callback}';
-      var service = new Y.JSONPRequest(url, {
-	on: {
-	  success: handleJSONPSuccess,
-	  failure: handleJSONPFailure,
-	  timeout: handleJSONPTimeout
-	},
-	timeout: 5000,
-	format: prepareJSONPUrl
-      });
-      window.setInterval( function() {
-	service.send();
-      }, 3000);
-    });
-
-    function initialize() {
-      var mapOptions = {
-	center: new google.maps.LatLng(38.903, -77.034),
-	zoom: 14,
-	mapTypeId: google.maps.MapTypeId.ROADMAP
-      };
-      map = new google.maps.Map(document.getElementById("map-canvas"),
-	mapOptions);
-      bikeTrack = new google.maps.MVCArray([
-	new google.maps.LatLng(38.903, -77.035),
-	new google.maps.LatLng(38.903, -77.035)
-      ]);
-      startCircle = new google.maps.Circle({
-	center: new google.maps.LatLng(38.897, -77.04),
-	fillColor: '#000000',
-	fillOpacity: 0.4,
-	strokeColor: '#000000',
-	strokeOpacity: 1.0,
-	strokeWeight: 2,
-	radius: 400
-      });
-      bikeCenter = new google.maps.Polyline({
-	path: bikeTrack,
-	strokeColor: '#FF0000',
-	strokeOpacity: 1.0,
-	strokeWeight: 3
-      });
-      // startCircle.setMap(map);
-      bikeCenter.setMap(map);
-    }
-    google.maps.event.addDomListener(window, 'load', initialize);
-    </script>
+    <script src="bikeflow.js"></script>
   </head>
   <body>
-    <div id="left-panel">
-      <div class="left-panel-block">
-	<div class="header">
-	  <h1>Bikeflow</h1>
+    <div class="full-page yui3-g-r yui3-skin-sam">
+    <div class="yui3-u-7-24" id="left-column">
+      <div class="yui3-g-r left-column-inner-grid">
+	<div class="left-panel-block yui3-u-1-1">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="control">
+	    <div class="header">
+	      <h1>Settings</h1>
+	    </div>
+	    <div class="content" id="settingsBox">
+	      <div id="user-location" style="visibility:hidden">
+		<h3>Your location</h3>
+		<p id="user-coordinates"></p>
+	      </div>
+	      <div id="system-selection">
+		<h3>Bikeshare System</h3>
+		  <p>
+		    Sort critierion
+		  </p>
+		  <p>
+		  <input type="radio" name="sort" class="sort" value ="alpha" checked>Alpha</input>
+		  <input type="radio" name="sort" class="sort" value ="lat">N to S</input>
+		  <input type="radio" name="sort" class="sort" value ="lng">E to W</input>
+		  <input type="radio" name="sort" class="sort" value ="dist">Distance</input>
+		  </p>
+		  <p>
+		    Filters
+		  </p>
+		  <table>
+		    <tr>
+		      <td class="filter-col-1" colspan="3">
+			<input type="checkbox" name="filter"
+				value ="region" disabled>&nbsp;Region
+			</input>
+		      </td>
+		    </tr>
+		    <tr>
+		      <td class="filter-col-1">
+			Latitude
+		      </td>
+		      <td>
+			min.
+		      </td>
+		      <td>
+		        <input type="number" id="min-lat" disabled></input>
+		      </td>
+		      <td>
+			max.
+		      </td>
+		      <td>
+		        <input type="number" id="max-lat" disabled></input>
+		      </td>
+		    </tr>
+		    <tr>
+		      <td class="filter-col-1">
+			Longitude
+		      </td>
+		      <td>
+			min.
+		      </td>
+		      <td>
+		        <input type="number" id="min-lng" disabled></input>
+		      </td>
+		      <td>
+			max.
+		      </td>
+		      <td>
+		        <input type="number" id="max-lng" disabled></input>
+		      </td>
+		    </tr>
+		  </table>
+		  <p>
+		  <input type="checkbox" name="filter" value ="continent">Continent</input>
+		  </p>
+		  <p>
+		  <input type="checkbox" name="filter" value ="distance">Distance away</input>
+		  </p>
+		  <p>
+		  <select id="system-list">
+		    <option value="0">loading...</option>
+		  </select>
+		  <button id="change-system-button" type="button" name="change-system" disabled>
+		    Change
+		  </button>
+		  </p>
+	      <p id="system-lat-lng"></p>
+	      </div>
+	    </div>
+	  </div>
 	</div>
-	<div class="content">
-	  <p>Bikeshare system visualization</p>
+	<div class="left-panel-block yui3-u-1-1">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="report">
+	    <div class="header">
+	      <h1>Current Data</h1>
+	    </div>
+	    <div class="content">
+	      <table id="bike-data-table">
+		<tr class="bike-row">
+		  <td class="bdt-left-cell" id="zero-one">Bikes</td>
+		  <td class="bdt-right-cell" id="zero-two">0000</td>
+		</tr>
+		<tr class="bike-row">
+		  <td class="bdt-left-cell" id="one-one">Max bikes</td>
+		  <td class="bdt-right-cell" id="one-two">0000</td>
+		</tr>
+		  <tr class="bike-row">
+		    <td class="bdt-left-cell" id="two-one">Docks</td>
+		    <td class="bdt-right-cell" id="two-two">0000</td>
+		  </tr>
+		    <tr class="bike-row">
+		    <td class="bdt-left-cell" id="three-one">Center</td>
+		    <td class="bdt-right-cell" id="three-two">??.???, ??.???</td>
+		  </tr>
+	      </table>
+	    </div>
+	  </div>
 	</div>
-      </div>
-      <div class="left-panel-block" id="settings">
-	<div class="header">
-	  <h1>Settings</h2>
-	</div>
-	<div class="content">
-	  <select>
-	      <option  value="vigo.json">vigo</option>
-	      <option  value="melbourne.json">melbourne</option>
-	      <option  value="capitalbikeshare.json">capitalbikeshare</option>
-	      <option  value="vigo.json">vigo</option>
-	  </select>
-	</div>
-      </div>
-      <div class="left-panel-block">
-	<div class="header">
-	  <h1>Current Data</h1>
-	</div>
-	<div class="content">
-	  <table>
-	     <tr class="bike-row">
-	        <td class="bike-cell" id="zero-one">bikes</td>
-	        <td class="bike-cell" id="zero-two"></td>
-	     </tr>
-	     <tr class="bike-row">
-	        <td class="bike-cell" id="one-one">max bikes</td>
-	        <td class="bike-cell" id="one-two"></td>
-	     </tr>
-	     <tr class="bike-row">
-	        <td class="bike-cell" id="two-one">docks</td>
-	        <td class="bike-cell" id="two-two"></td>
-	     </tr>
-	     <tr class="bike-row">
-	        <td class="bike-cell" id="three-one">Ctr of Mass</td>
-	        <td class="bike-cell" id="three-two"></td>
-	     </tr>
-	  </table>
-	  <div id="stations">
+	<div class="left-panel-block yui3-u-1-1">
+	  <div class="yui3-u-1-1 left-panel-block-contents" id="about-box">
+	    <div class="header">
+	      <h1>About</h1>
+	    </div>
+	    <div class="content">
+	      <p>&copy; bike.mobi.ng, 2013</p>
+	      <p>This is an MVP (minimum viable product). Try it out.
+		We will be taking comments and suggestions soon. 
+	      </p>
+	      <h3>On the backlog</h3>
+	      <ul>
+		<li>
+		  If the browser thinks you are near(ish) a bike-share system,
+		  make that the initial setting.
+		</li>
+		<li>
+		  Store system data so that there is always something to look at,
+		  instead of starting a new track each time.
+		</li>
+		<li>
+		  Add bike and dock availability predictors for stations, based on historical data.
+		  Incorporate day of week, weather, and other interesting parameters to the prediction.
+		</li>
+		<li>
+		  Add a weathervane graphic to show which way the bikes are blowing.
+		</li>
+		<li>
+		  Show worldwide data, like the 3D geographic center of all the bikes,
+		  and its projectin onto the surface of the earth.
+		</li>
+	      </ul>
+	    </div>
 	  </div>
 	</div>
       </div>
     </div>
-  <div id="map-canvas"/>
+    <div class="yui3-u-13-24 right-column">
+      <div class="yui3-g-r right-column-inner-grid">
+	<div class="map-block yui3-u-1-1">
+	  <div class="yui3-u-1-1" id="map_canvas">
+	  </div>
+	</div>
+      </div>
+    </div>
+  </div>
 </body>
 </html>
