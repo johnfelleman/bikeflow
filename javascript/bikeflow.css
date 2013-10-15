@@ -9,7 +9,8 @@
       height: 640px;
     }
     #left-column {
-      height: auto;
+      height: 640px;
+      overflow: scroll;
       font-family: Verdana,Arial,sans-serif;
       font-size: 13px;
       margin: 0px;
@@ -48,6 +49,9 @@
     .left-panel-block div .content  h3 {
       font:lighter 15px "Century Gothic",sans-serif;
       letter-spacing: 0px;
+    }
+    td.filter-col-1 {
+      width: auto;
     }
     table#bike-data-table {
        width: 20em;

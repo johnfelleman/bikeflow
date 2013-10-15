@@ -123,16 +123,32 @@ function drawDataBox() {
   var a, c, d;
   var R = 6371 / 1.609344; // miles
   var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
-  Y.Array.each(systemData, function(station,value){
-    var bikes = station.bikes;
-    var docks = station.free;
-    bikesAcc += bikes;
-    bikeLatAccE6 += bikes * station.lat;
-    bikeLngAccE6 += bikes * station.lng;
-    docksAcc += docks;
-    dockLatAccE6 += docks * station.lat;
-    dockLngAccE6 += docks * station.lng;
-  });
+  
+  // Some systems return the info as strings
+  // For simplicity, we check one value and then branch as needed.
+  if (typeof systemData[0].bikes === String) {
+    Y.Array.each(systemData, function(station,value){
+      var bikes = parseInt(station.bikes);
+      var docks = parseInt(station.free);
+      bikesAcc += bikes;
+      bikeLatAccE6 += bikes * parseInt(station.lat);
+      bikeLngAccE6 += bikes * parseInt(station.lng);
+      docksAcc += docks;
+      dockLatAccE6 += docks * parseInt(station.lat);
+      dockLngAccE6 += docks * parseInt(station.lng);
+    });
+  } else {
+    Y.Array.each(systemData, function(station,value){
+      var bikes = station.bikes;
+      var docks = station.free;
+      bikesAcc += bikes;
+      bikeLatAccE6 += bikes * station.lat;
+      bikeLngAccE6 += bikes * station.lng;
+      docksAcc += docks;
+      dockLatAccE6 += docks * station.lat;
+      dockLngAccE6 += docks * station.lng;
+    });
+  }
   bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
   bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
   dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
@@ -176,10 +192,68 @@ function prepareJSONPUrl(url, proxy, username) {
   });
 }
 
-function handleSystemList(data) {
-  systemList = data;
+function drawSettingsBox() {
+  var comparator;
+  switch (Y.one('input.sort:checked').get('value')) {
+    case "lat":
+    comparator = function (a, b) {
+      if (a.lat < b.lat) {
+	return 1;
+      } else if (a.lat > b.lat) {
+	return -1;
+      } else {
+	return 0;
+      }
+    }
+    break;
+
+    case "lng":
+    comparator = function (a, b) {
+      if (a.lng + 180 > b.lng + 180) {
+	return 1;
+      } else if (a.lng < b.lng) {
+	return -1;
+      } else {
+	return 0;
+      }
+    }
+    break;
+
+    case "dist":
+    comparator = function (a, b) {
+      var dista = Math.sqrt(a.lat * a.lat + a.lng * a.lng);
+      var distb = Math.sqrt(b.lat * b.lat + b.lng * b.lng);
+      if (dista > distb) {
+	return 1;
+      } else if (dista < distb) {
+	return -1;
+      } else {
+	return 0;
+      }
+    }
+    break;
+
+    case "alpha":
+    comparator = function (a, b) {
+      if (a.name > b.name) {
+	return 1;
+      } else if (a.name < b.name) {
+	return -1;
+      } else {
+	return 0;
+      }
+    };
+    default:
+    break;
+  }
+  systemList.sort(comparator);
   setSelectedSystem();
   updateSettingsBox();
+}
+
+function handleSystemList(data) {
+  systemList = data;
+  drawSettingsBox();
 }
 
 function initialize() {
@@ -203,6 +277,7 @@ function initialize() {
 
   bikeTrack = new google.maps.MVCArray([]);
 
+  Y.all('input.sort').on('click', drawSettingsBox);
   new Y.JSONPRequest('http://api.citybik.es/networks.json', {
     on: {
       success: handleSystemList,
