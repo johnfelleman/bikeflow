@@ -79,6 +79,7 @@ var yui = YUI().use(
 
   function setSelectedSystem() {
 
+    bikeTrack.clear();
     var urlTemplate = 'http://api.citybik.es/{name}.json?callback={callback}';
     selectedSystemIndex = parseInt(Y.one('p select#system-list').get('value'));
     if (dataTimer) {
@@ -126,7 +127,7 @@ function drawDataBox() {
   
   // Some systems return the info as strings
   // For simplicity, we check one value and then branch as needed.
-  if (typeof systemData[0].bikes === String) {
+  if (typeof systemData[0].bikes === 'string') {
     Y.Array.each(systemData, function(station,value){
       var bikes = parseInt(station.bikes);
       var docks = parseInt(station.free);
@@ -161,8 +162,18 @@ function drawDataBox() {
   Y.one('#two-two').set('text', docksAcc);
   Y.one('#three-two').set('text', ( bikeLatAvgDeg.toFixed(3) +
       ', ' + bikeLngAvgDeg.toFixed(3)));
-  if (bikeTrack.push(new google.maps.LatLng(bikeLatAvgDeg,
-      bikeLngAvgDeg)) === 2) {
+  var newPoint = new google.maps.LatLng(bikeLatAvgDeg, bikeLngAvgDeg);
+  switch (bikeTrack.push(newPoint)) {
+      case 1:
+	new google.maps.Marker({
+	position: newPoint,
+	map: systemMap,
+	title: "Initial Center of Bikes"
+      });
+      systemMap.setCenter(newPoint);
+      break;
+
+      case 2:
       bikeCenter = new google.maps.Polyline({
 	path: bikeTrack,
 	strokeColor: '#FF0000',
@@ -170,6 +181,10 @@ function drawDataBox() {
 	strokeWeight: 3
       });
       bikeCenter.setMap(systemMap);
+      break;
+
+      default:
+      break;
     }
 
 }
