@@ -67,7 +67,23 @@ var yui = YUI().use(
 
   // URL of SF network: http://bayareabikeshare.com/stations/json/
 
-  function setCoordinates() {
+  // some google maps classes and methods
+  var  magnifier = {
+    onAdd: function() {
+      // var magContent = Y.Node.create('<div id="mag-content">mag me up</div>').appendTo(
+    },
+
+    draw: function() {
+    },
+
+    onRemove: function() {
+    }
+
+  };
+
+  magnifier.prototype = new google.maps.OverlayView();
+
+  function setSystemCoordinates() {
     Y.one('p#system-lat-lng').setHTML('System coordinates: ' +
       (0.000001 * systemList[selectedSystemIndex].lat).toFixed(3) +
       ', ' +
@@ -77,15 +93,20 @@ var yui = YUI().use(
 	      (0.000001 * systemList[selectedSystemIndex].lng)));
     }
 
-  function setSelectedSystem() {
-
-    bikeTrack.clear();
-    var urlTemplate = 'http://api.citybik.es/{name}.json?callback={callback}';
+  function changeSelectedSystem() {
     selectedSystemIndex = parseInt(Y.one('p select#system-list').get('value'));
+  }
+
+  function setSelectedSystem() {
+    var urlTemplate = 'http://api.citybik.es/{name}.json?callback={callback}';
+
+    if (bikeTrack) {
+      bikeTrack.clear();
+    }
     if (dataTimer) {
       window.clearInterval(dataTimer);
     }
-    setCoordinates();
+    setSystemCoordinates();
     dataTimer = window.setInterval( function() {
     new Y.JSONPRequest(urlTemplate, {
       on: {
@@ -98,7 +119,11 @@ var yui = YUI().use(
 	  format: prepareJSONPUrl
 	}).send();
       }, 10000);
-  };
+    if (typeof(Storage)) {
+      localStorage.selectedSystemIndex = selectedSystemIndex;
+      localStorage.sortMethod = Y.one('input.sort:checked').get('value');
+    }
+  }
 
   // Functions to draw or redraw each box
   function updateSettingsBox() {
@@ -118,191 +143,195 @@ var yui = YUI().use(
     Y.one('#system-list').setHTML(systemOptions);
   }
 
-function drawDataBox() {
-  var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
-    bikesAcc = 0, docksAcc = 0, bikeCenter;
-  var a, c, d;
-  var R = 6371 / 1.609344; // miles
-  var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
-  
-  // Some systems return the info as strings
-  // For simplicity, we check one value and then branch as needed.
-  if (typeof systemData[0].bikes === 'string') {
-    Y.Array.each(systemData, function(station,value){
-      var bikes = parseInt(station.bikes);
-      var docks = parseInt(station.free);
-      bikesAcc += bikes;
-      bikeLatAccE6 += bikes * parseInt(station.lat);
-      bikeLngAccE6 += bikes * parseInt(station.lng);
-      docksAcc += docks;
-      dockLatAccE6 += docks * parseInt(station.lat);
-      dockLngAccE6 += docks * parseInt(station.lng);
-    });
-  } else {
-    Y.Array.each(systemData, function(station,value){
-      var bikes = station.bikes;
-      var docks = station.free;
-      bikesAcc += bikes;
-      bikeLatAccE6 += bikes * station.lat;
-      bikeLngAccE6 += bikes * station.lng;
-      docksAcc += docks;
-      dockLatAccE6 += docks * station.lat;
-      dockLngAccE6 += docks * station.lng;
+  function drawDataBox() {
+    var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
+      bikesAcc = 0, docksAcc = 0, bikeCenter;
+    var a, c, d;
+    var R = 6371 / 1.609344; // miles
+    var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
+    
+    // Some systems return the info as strings
+    // For simplicity, we check one value and then branch as needed.
+    if (typeof systemData[0].bikes === 'string') {
+      Y.Array.each(systemData, function(station,value){
+	var bikes = parseInt(station.bikes);
+	var docks = parseInt(station.free);
+	bikesAcc += bikes;
+	bikeLatAccE6 += bikes * parseInt(station.lat);
+	bikeLngAccE6 += bikes * parseInt(station.lng);
+	docksAcc += docks;
+	dockLatAccE6 += docks * parseInt(station.lat);
+	dockLngAccE6 += docks * parseInt(station.lng);
+      });
+    } else {
+      Y.Array.each(systemData, function(station,value){
+	var bikes = station.bikes;
+	var docks = station.free;
+	bikesAcc += bikes;
+	bikeLatAccE6 += bikes * station.lat;
+	bikeLngAccE6 += bikes * station.lng;
+	docksAcc += docks;
+	dockLatAccE6 += docks * station.lat;
+	dockLngAccE6 += docks * station.lng;
+      });
+    }
+    bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
+    bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
+    dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
+    dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
+    if (bikesAcc > maxBikes) {
+      maxBikes = bikesAcc;
+    }
+    Y.one('#zero-two').set('text', bikesAcc);
+    Y.one('#one-two').set('text', maxBikes);
+    Y.one('#two-two').set('text', docksAcc);
+    Y.one('#three-two').set('text', ( bikeLatAvgDeg.toFixed(3) +
+	', ' + bikeLngAvgDeg.toFixed(3)));
+    var newPoint = new google.maps.LatLng(bikeLatAvgDeg, bikeLngAvgDeg);
+    switch (bikeTrack.push(newPoint)) {
+	case 1:
+	  new google.maps.Marker({
+	  position: newPoint,
+	  map: systemMap,
+	  title: "Initial Center of Bikes"
+	});
+	systemMap.setCenter(newPoint);
+	break;
+
+	case 2:
+	bikeCenter = new google.maps.Polyline({
+	  path: bikeTrack,
+	  strokeColor: '#FF0000',
+	  strokeOpacity: 1.0,
+	  strokeWeight: 3
+	});
+	bikeCenter.setMap(systemMap);
+	break;
+
+	default:
+	break;
+      }
+
+  }
+
+  function handleSystemData(data) {
+    systemData = data;
+    drawDataBox();
+  }
+
+  function handleJSONPFailure() {
+  }
+
+  function handleJSONPTimeout() {
+  }
+
+  function prepareJSONPUrl(url, proxy, username) {
+    return Y.Lang.sub(url, {
+      callback: proxy,
+      name: systemList[selectedSystemIndex].name
     });
   }
-  bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
-  bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
-  dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
-  dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
-  if (bikesAcc > maxBikes) {
-    maxBikes = bikesAcc;
-  }
-  Y.one('#zero-two').set('text', bikesAcc);
-  Y.one('#one-two').set('text', maxBikes);
-  Y.one('#two-two').set('text', docksAcc);
-  Y.one('#three-two').set('text', ( bikeLatAvgDeg.toFixed(3) +
-      ', ' + bikeLngAvgDeg.toFixed(3)));
-  var newPoint = new google.maps.LatLng(bikeLatAvgDeg, bikeLngAvgDeg);
-  switch (bikeTrack.push(newPoint)) {
-      case 1:
-	new google.maps.Marker({
-	position: newPoint,
-	map: systemMap,
-	title: "Initial Center of Bikes"
-      });
-      systemMap.setCenter(newPoint);
+
+  function sortSystems(key) {
+    var comparator;
+    switch (Y.one('input.sort:checked').get('value')) {
+      case "lat":
+      comparator = function (a, b) {
+	if (a.lat < b.lat) {
+	  return 1;
+	} else if (a.lat > b.lat) {
+	  return -1;
+	} else {
+	  return 0;
+	}
+      }
       break;
 
-      case 2:
-      bikeCenter = new google.maps.Polyline({
-	path: bikeTrack,
-	strokeColor: '#FF0000',
-	strokeOpacity: 1.0,
-	strokeWeight: 3
-      });
-      bikeCenter.setMap(systemMap);
+      case "lng":
+      comparator = function (a, b) {
+	if (a.lng + 180 > b.lng + 180) {
+	  return 1;
+	} else if (a.lng < b.lng) {
+	  return -1;
+	} else {
+	  return 0;
+	}
+      }
       break;
 
+      case "dist":
+      comparator = function (a, b) {
+	var dista = Math.sqrt(a.lat * a.lat + a.lng * a.lng);
+	var distb = Math.sqrt(b.lat * b.lat + b.lng * b.lng);
+	if (dista > distb) {
+	  return 1;
+	} else if (dista < distb) {
+	  return -1;
+	} else {
+	  return 0;
+	}
+      }
+      break;
+
+      case "alpha":
+      comparator = function (a, b) {
+	if (a.name > b.name) {
+	  return 1;
+	} else if (a.name < b.name) {
+	  return -1;
+	} else {
+	  return 0;
+	}
+      };
       default:
       break;
     }
-
-}
-
-function handleSystemData(data) {
-  systemData = data;
-  drawDataBox();
-}
-
-function handleJSONPFailure() {
-}
-
-function handleJSONPTimeout() {
-}
-
-function prepareJSONPUrl(url, proxy, username) {
-  return Y.Lang.sub(url, {
-    callback: proxy,
-    name: systemList[selectedSystemIndex].name
-  });
-}
-
-function drawSettingsBox() {
-  var comparator;
-  switch (Y.one('input.sort:checked').get('value')) {
-    case "lat":
-    comparator = function (a, b) {
-      if (a.lat < b.lat) {
-	return 1;
-      } else if (a.lat > b.lat) {
-	return -1;
-      } else {
-	return 0;
-      }
-    }
-    break;
-
-    case "lng":
-    comparator = function (a, b) {
-      if (a.lng + 180 > b.lng + 180) {
-	return 1;
-      } else if (a.lng < b.lng) {
-	return -1;
-      } else {
-	return 0;
-      }
-    }
-    break;
-
-    case "dist":
-    comparator = function (a, b) {
-      var dista = Math.sqrt(a.lat * a.lat + a.lng * a.lng);
-      var distb = Math.sqrt(b.lat * b.lat + b.lng * b.lng);
-      if (dista > distb) {
-	return 1;
-      } else if (dista < distb) {
-	return -1;
-      } else {
-	return 0;
-      }
-    }
-    break;
-
-    case "alpha":
-    comparator = function (a, b) {
-      if (a.name > b.name) {
-	return 1;
-      } else if (a.name < b.name) {
-	return -1;
-      } else {
-	return 0;
-      }
-    };
-    default:
-    break;
+    systemList.sort(comparator);
   }
-  systemList.sort(comparator);
-  setSelectedSystem();
-  updateSettingsBox();
-}
 
-function handleSystemList(data) {
-  systemList = data;
-  drawSettingsBox();
-}
+  function handleSystemList(data) {
+    systemList = data;
+    sortSystems( Y.one('input.sort:checked').get('value'));
+    setSelectedSystem();
+    updateSettingsBox();
+  }
 
-function initialize() {
+  function initialize() {
 
-  // draw the base page
-  Y.one('p select#system-list').
-    on('change', function() {
-      this.siblings('button#change-system-button').
-      removeAttribute('disabled').
-      on('click', function() {
-	this.setAttribute('disabled');
-	setSelectedSystem();
-	updateSettingsBox();
+    if (Storage && localStorage.selectedSystemIndex) {
+      selectedSystemIndex = parseInt(localStorage.selectedSystemIndex);
+      Y.one('input.sort:checked').
+	    set('value', localStorage.sortMethod);
+    }
+    Y.all('input.sort').on('click', updateSettingsBox);
+    Y.one('p select#system-list').
+      on('change', function() {
+	this.siblings('button#change-system-button').
+	removeAttribute('disabled').
+	on('click', function() {
+	  this.setAttribute('disabled');
+	  changeSelectedSystem()
+	  setSelectedSystem();
+	  updateSettingsBox();
+	});
       });
-    });
-    
+      
     systemMap = new google.maps.Map(document.getElementById("map_canvas"), {
       zoom: 14,
       mapTypeId: google.maps.MapTypeId.ROADMAP
     });
 
-  bikeTrack = new google.maps.MVCArray([]);
+    bikeTrack = new google.maps.MVCArray([]);
 
-  Y.all('input.sort').on('click', drawSettingsBox);
-  new Y.JSONPRequest('http://api.citybik.es/networks.json', {
-    on: {
-      success: handleSystemList,
-      failure: handleJSONPFailure,
-      timeout: handleJSONPTimeout,
-      type: 'text/javascript'
-    },
-    timeout: 5000
-  }).send();
-
+    new Y.JSONPRequest('http://api.citybik.es/networks.json', {
+      on: {
+	success: handleSystemList,
+	failure: handleJSONPFailure,
+	timeout: handleJSONPTimeout,
+	type: 'text/javascript'
+      },
+      timeout: 5000
+    }).send();
   }
-google.maps.event.addDomListener(window, 'load', initialize);
+  google.maps.event.addDomListener(window, 'load', initialize);
 });
