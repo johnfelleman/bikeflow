@@ -25,28 +25,30 @@ google.maps.LatLng.prototype.newLatLngFromMicroDeg = function(lat, lng) {
   return new this.LatLng((0.000001 * lat), (0.000001 * lng));
 }
 
-function getUserLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      function(position) {
-	return new google.maps.LatLng(
-	  position.coords.latitude,
-	  position.coords.longitude
-	);
-      },
-      function showError(error) {
-	switch(error.code) {
-	  case error.PERMISSION_DENIED:
-	  case error.POSITION_UNAVAILABLE:
-	  case error.TIMEOUT:
-	  case error.UNKNOWN_ERROR:
-	  return undefined;
-	  break;
-	}
-      });
-  } else {
-    return undefined;
-  }
+function sphCosDist(lat1, lon1, lat2, lon2) {
+  var R = 6371; // km
+  var lat1 = lat1 * Math.PI / 180.0;
+  var lat2 = lat2 * Math.PI / 180.0;
+  var lon1 = lon1 * Math.PI / 180.0;
+  var lon2 = lon2 * Math.PI / 180.0;
+  return Math.acos(Math.sin(lat1)*Math.sin(lat2) + 
+                  Math.cos(lat1)*Math.cos(lat2) *
+		                    Math.cos(lon2-lon1)) * R;
+}
+
+function haversineDist(lat1, lon1, lat2, lon2) {
+  var R = 6371; // km
+  var lat1 = lat1 * Math.PI / 180.0;
+  var lat2 = lat2 * Math.PI / 180.0;
+  var lon1 = lon1 * Math.PI / 180.0;
+  var lon2 = lon2 * Math.PI / 180.0;
+  var dLat = (lat2-lat1);
+  var dLon = (lon2-lon1);
+
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.sin(dLon/2) * Math.sin(dLon/2) * Math.cos(lat1) * Math.cos(lat2); 
+  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
+  return R * c;
 }
 
 var yui = YUI().use(
@@ -64,6 +66,7 @@ var yui = YUI().use(
   var systemList;
   var systemData;
   var dataTimer;
+  var userLocation;
 
   // URL of SF network: http://bayareabikeshare.com/stations/json/
 
@@ -81,6 +84,57 @@ var yui = YUI().use(
 
   };
 
+  function requestSystemList() {
+    new Y.JSONPRequest('http://api.citybik.es/networks.json', {
+      on: {
+	success: handleSystemList,
+	failure: handleJSONPFailure,
+	timeout: handleJSONPTimeout,
+	type: 'text/javascript'
+      },
+      timeout: 5000
+    }).send();
+  }
+
+  function displayUserLocation(element) {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+	function(position) {
+	  userLocation = new google.maps.LatLng(position.coords.latitude,
+						position.coords.longitude);
+	  requestSystemList();
+	  console.log('getCurrentPosition returned ' + position.coords.latitude + ', ' +
+			position.coords.longitude);
+	  element.setHTML(position.coords.latitude.toFixed(3) +
+		  ', ' + position.coords.longitude.toFixed(3));
+	},
+	function showError(error) {
+	  console.log('getCurrentPosition returned ' + error.code);
+	  switch(error.code) {
+	    case error.PERMISSION_DENIED:
+	    userLocation = new google.maps.LatLng(38.894, -76.948);
+	    requestSystemList();
+	    element.setHTML('38.894, -76.948');
+	    // element.setHTML('Enable user location to see and use your position');
+	    break;
+
+	    case error.POSITION_UNAVAILABLE:
+	    case error.TIMEOUT:
+	    case error.UNKNOWN_ERROR:
+	    userLocation = new google.maps.LatLng(38.894, -76.948);
+	    requestSystemList();
+	    element.setHTML('I am unable to determine your current location.');
+	    break;
+	  }
+	});
+    } else {
+      console.log('no geolocation');
+      userLocation = new google.maps.LatLng(38.894, -76.948);
+      requestSystemList();
+      element.setHTML('38.894, -76.948');
+      // element.setHTML('Your browser does not support gelocation');
+    }
+  }
   magnifier.prototype = new google.maps.OverlayView();
 
   function setSystemCoordinates() {
@@ -95,6 +149,9 @@ var yui = YUI().use(
 
   function changeSelectedSystem() {
     selectedSystemIndex = parseInt(Y.one('p select#system-list').get('value'));
+    if (bikeTrack) {
+      bikeTrack.clear();
+    }
   }
 
   function setSelectedSystem() {
@@ -120,25 +177,20 @@ var yui = YUI().use(
 	}).send();
       }, 10000);
     if (typeof(Storage)) {
-      localStorage.selectedSystemIndex = selectedSystemIndex;
+      localStorage.selectedSystemName = systemList[selectedSystemIndex].name;
       localStorage.sortMethod = Y.one('input.sort:checked').get('value');
     }
   }
 
   // Functions to draw or redraw each box
   function updateSettingsBox() {
-    var userPos = getUserLocation();
     var systemOptions = "";
     
-    if (userPos) {
-      Y.one('#user-coordinates').setHTML(userPos.latitude.toFixed(3),
-      userPos.longitude.toFixed(3));
-    }
     Y.Array.each(systemList, function(system,value) {
       systemOptions += '\t<option value="' + value + '" ' ;
       systemOptions += ((value === selectedSystemIndex) ?
 	    'selected' : '') ;
-      systemOptions += '>' + system.name + '</option>\n';
+      systemOptions += '>' + system.name + ' (' + system.distanceAway.toFixed(0) + 'km)</option>\n';
     });
     Y.one('#system-list').setHTML(systemOptions);
   }
@@ -232,9 +284,23 @@ var yui = YUI().use(
     });
   }
 
+  function changeSortMethod() {
+    var saveSelected = systemList[selectedSystemIndex].name;
+    sortSystems(Y.one('input.sort:checked').get('value'));
+    Y.Array.each(systemList, function(system, value) {
+      if (system.name === saveSelected) {
+	selectedSystemIndex = value;
+      }
+    });
+    if (typeof(Storage)) {
+      localStorage.sortMethod = Y.one('input.sort:checked').get('value');
+    }
+    updateSettingsBox();
+  }
+
   function sortSystems(key) {
     var comparator;
-    switch (Y.one('input.sort:checked').get('value')) {
+    switch (key) {
       case "lat":
       comparator = function (a, b) {
 	if (a.lat < b.lat) {
@@ -261,8 +327,10 @@ var yui = YUI().use(
 
       case "dist":
       comparator = function (a, b) {
-	var dista = Math.sqrt(a.lat * a.lat + a.lng * a.lng);
-	var distb = Math.sqrt(b.lat * b.lat + b.lng * b.lng);
+	var dista = sphCosDist((0.000001 * a.lat), (0.000001 * a.lng), userLocation.lat(),
+	      userLocation.lng());
+	var distb = sphCosDist((0.000001 * b.lat), (0.000001 * b.lng), userLocation.lat(),
+	      userLocation.lng());
 	if (dista > distb) {
 	  return 1;
 	} else if (dista < distb) {
@@ -291,7 +359,26 @@ var yui = YUI().use(
 
   function handleSystemList(data) {
     systemList = data;
+    Y.Array.each(systemList, function(system, value) {
+      system.distanceAway = sphCosDist((0.000001 * system.lat),
+					  (0.000001 * system.lng),
+					  userLocation.lat(),
+					  userLocation.lng());
+      console.log(system.distanceAway + 'km from ' + system.name + ' at ' +
+	(0.000001 * system.lat) + ', ' +
+	(0.000001 * system.lng) + ', ' +
+	userLocation.lat() + ', ' +
+	userLocation.lng());
+    });
     sortSystems( Y.one('input.sort:checked').get('value'));
+    if (Storage && localStorage.selectedSystemName) {
+      Y.Array.each(systemList, function(system, value) {
+	if (system.name === localStorage.selectedSystemName) {
+	  selectedSystemIndex = value;
+	  return true;
+	}
+      });
+    }
     setSelectedSystem();
     updateSettingsBox();
   }
@@ -299,11 +386,11 @@ var yui = YUI().use(
   function initialize() {
 
     if (Storage && localStorage.selectedSystemIndex) {
-      selectedSystemIndex = parseInt(localStorage.selectedSystemIndex);
-      Y.one('input.sort:checked').
-	    set('value', localStorage.sortMethod);
+      Y.one('input.sort[value="' + localStorage.sortMethod + '"]').
+	    setAttribute('checked', 'checked');
     }
-    Y.all('input.sort').on('click', updateSettingsBox);
+    displayUserLocation(Y.one('#user-coordinates'));
+    Y.all('input.sort').on('click', changeSortMethod);
     Y.one('p select#system-list').
       on('change', function() {
 	this.siblings('button#change-system-button').
@@ -322,16 +409,6 @@ var yui = YUI().use(
     });
 
     bikeTrack = new google.maps.MVCArray([]);
-
-    new Y.JSONPRequest('http://api.citybik.es/networks.json', {
-      on: {
-	success: handleSystemList,
-	failure: handleJSONPFailure,
-	timeout: handleJSONPTimeout,
-	type: 'text/javascript'
-      },
-      timeout: 5000
-    }).send();
   }
   google.maps.event.addDomListener(window, 'load', initialize);
 });
