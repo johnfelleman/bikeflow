@@ -57,16 +57,29 @@ var yui = YUI().use(
     'node',
     'jsonp',
     'jsonp-url',
+    'querystring-parse-simple',
     function (Y) {
   
   // globals
+  var showStations = true;
   var systemMap;
   var bikeTrack;
   var selectedSystemIndex = 0;
   var systemList;
   var systemData;
-  var dataTimer;
+  var prevBikesAtSta;
+  var stationDeltas;
+  var stationMarkers;
   var userLocation;
+  // Change this to point at either the production or the staging version
+  // of the API service.
+  if (Y.QueryString.parse(window.location.search.slice(1)).cbStage == "true") {
+    cbBaseUrl = "http://staging.citybik.es/";
+    cbUrlExt = '';
+  } else {
+    cbBaseUrl = "http://api.citybik.es/";
+    cbUrlExt = '.json';
+  }
 
   // URL of SF network: http://bayareabikeshare.com/stations/json/
 
@@ -85,7 +98,9 @@ var yui = YUI().use(
   };
 
   function requestSystemList() {
-    new Y.JSONPRequest('http://api.citybik.es/networks.json', {
+    var url = cbBaseUrl + 'networks' + cbUrlExt;
+    new Y.JSONPRequest(url, {
+    // new Y.JSONPRequest(cbBaseUrl + 'networks' + cbUrlExt, {
       on: {
 	success: handleSystemList,
 	failure: handleJSONPFailure,
@@ -142,20 +157,57 @@ var yui = YUI().use(
       (0.000001 * systemList[selectedSystemIndex].lat).toFixed(3) +
       ', ' +
       (0.000001 * systemList[selectedSystemIndex].lng).toFixed(3));
-    systemMap.setCenter(new google.maps.LatLng((0.000001 *
-	  systemList[selectedSystemIndex].lat),
-	      (0.000001 * systemList[selectedSystemIndex].lng)));
+    systemMap.setCenter(new google.maps.LatLng(( systemList[selectedSystemIndex].lat),
+	      (systemList[selectedSystemIndex].lng)));
     }
 
   function changeSelectedSystem() {
     selectedSystemIndex = parseInt(Y.one('p select#system-list').get('value'));
+    prevBikesAtSta.length = 0;
+    stationDeltas.length = 0;
     if (bikeTrack) {
       bikeTrack.clear();
     }
   }
 
   function setSelectedSystem() {
-    var urlTemplate = 'http://api.citybik.es/{name}.json?callback={callback}';
+    var urlTemplate = cbBaseUrl + '{name}' + cbUrlExt + '?callback={callback}';
+    var dataTimer;
+    prevBikesAtSta = [];
+    stationDeltas = [];
+    stationMarkers = [];
+
+    function startMapping(data) {
+      Y.Array.each(data, function(station, index) {
+	stationDeltas[index] = 0;
+	prevBikesAtSta[index] = station.bikes;
+	stationMarkers[index] = new google.maps.Marker({
+	  position: new google.maps.LatLng(0.000001 * station.lat, 0.000001 * station.lng),
+	  map: systemMap,
+	  icon: {
+	      path: google.maps.SymbolPath.CIRCLE,
+	      // fillColor: index * 0x2050b0 % 0xffff + '',
+	      fillColor: 'red',
+	      fillOpacity: 0.5,
+	      strokeWeight: 2,
+	      scale: 20
+	  },
+	  title: station.name
+	});
+      });
+      dataTimer = window.setInterval( function() {
+	new Y.JSONPRequest(urlTemplate, {
+	  on: {
+	    success: handleSystemData,
+	    failure: handleJSONPFailure,
+	    timeout: handleJSONPTimeout,
+	    type: 'text/javascript'
+	  },
+	    timeout: 5000,
+	    format: prepareJSONPUrl
+	  }).send();
+	}, 5000);
+      }
 
     if (bikeTrack) {
       bikeTrack.clear();
@@ -164,10 +216,9 @@ var yui = YUI().use(
       window.clearInterval(dataTimer);
     }
     setSystemCoordinates();
-    dataTimer = window.setInterval( function() {
     new Y.JSONPRequest(urlTemplate, {
       on: {
-	  success: handleSystemData,
+	  success: startMapping,
 	  failure: handleJSONPFailure,
 	  timeout: handleJSONPTimeout,
 	  type: 'text/javascript'
@@ -175,7 +226,6 @@ var yui = YUI().use(
 	  timeout: 5000,
 	  format: prepareJSONPUrl
 	}).send();
-      }, 10000);
     if (typeof(Storage)) {
       localStorage.selectedSystemName = systemList[selectedSystemIndex].name;
       localStorage.sortMethod = Y.one('input.sort:checked').get('value');
@@ -195,42 +245,50 @@ var yui = YUI().use(
     Y.one('#system-list').setHTML(systemOptions);
   }
 
+  var iterations = 0;
   function drawDataBox() {
     var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
       bikesAcc = 0, docksAcc = 0, bikeCenter;
     var a, c, d;
     var R = 6371 / 1.609344; // miles
     var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
+    var icon, color;
     
-    // Some systems return the info as strings
-    // For simplicity, we check one value and then branch as needed.
+    iterations++;
     if (typeof systemData[0].bikes === 'string') {
-      Y.Array.each(systemData, function(station,value){
-	var bikes = parseInt(station.bikes);
-	var docks = parseInt(station.free);
-	bikesAcc += bikes;
-	bikeLatAccE6 += bikes * parseInt(station.lat);
-	bikeLngAccE6 += bikes * parseInt(station.lng);
-	docksAcc += docks;
-	dockLatAccE6 += docks * parseInt(station.lat);
-	dockLngAccE6 += docks * parseInt(station.lng);
-      });
+      alert('stringto number failed');
     } else {
       Y.Array.each(systemData, function(station,value){
 	var bikes = station.bikes;
 	var docks = station.free;
+	var delta = stationDeltas[value];
+	station.lat *= 0.000001;
+	station.lng *= 0.000001;
 	bikesAcc += bikes;
 	bikeLatAccE6 += bikes * station.lat;
 	bikeLngAccE6 += bikes * station.lng;
 	docksAcc += docks;
 	dockLatAccE6 += docks * station.lat;
 	dockLngAccE6 += docks * station.lng;
+
+	stationMarkers[value].setTitle(iterations + ' ' + station.name +
+	      '\nbikes/docks (\u0394)\n' + station.bikes + '/' + station.free + '(' + delta + ')');
+	icon =  stationMarkers[value].getIcon();
+	icon.scale = (bikes + docks) / 2;
+	icon.strokeWeight = docks / 3;
+	icon.fillOpacity = bikes / (bikes + docks),
+	color = (delta > 0) ? 'ff0000' : ((delta === 0) ? '000000' : '00ff00' );
+	icon.strokeColor = color;
+	icon.fillColor = color;
+	icon.fillOpacity = 0.5;
+	stationMarkers[value].setIcon(icon);
+	systemMap.setCenter(newPoint);
       });
     }
-    bikeLatAvgDeg = 0.000001 * bikeLatAccE6 / bikesAcc;
-    bikeLngAvgDeg = 0.000001 * bikeLngAccE6 / bikesAcc;
-    dockLatAvgDeg = 0.000001 * dockLatAccE6 / docksAcc;
-    dockLngAvgDeg = 0.000001 * dockLngAccE6 / docksAcc;
+    bikeLatAvgDeg = bikeLatAccE6 / bikesAcc;
+    bikeLngAvgDeg = bikeLngAccE6 / bikesAcc;
+    dockLatAvgDeg = dockLatAccE6 / docksAcc;
+    dockLngAvgDeg = dockLngAccE6 / docksAcc;
     if (bikesAcc > maxBikes) {
       maxBikes = bikesAcc;
     }
@@ -267,7 +325,23 @@ var yui = YUI().use(
   }
 
   function handleSystemData(data) {
+    Y.Array.each(data, function(station, index) {
+      stationDeltas[index] = stationDeltas[index] / 2 + 16 * (station.bikes - prevBikesAtSta[index]);
+      prevBikesAtSta[index] = station.bikes;
+    });
+
     systemData = data;
+
+    // if data was returned as strings, convert to numbers
+    if (typeof systemData[0].bikes === 'string') {
+      Y.Array.each(systemData, function(station,value){
+	station.bikes = parseInt(station.bikes);
+	station.docks = parseInt(station.free);
+	station.lat = parseInt(station.lat);
+	station.lng = parseInt(station.lng);
+      });
+    }
+
     drawDataBox();
   }
 
