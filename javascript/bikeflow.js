@@ -61,6 +61,7 @@ var yui = YUI().use(
     function (Y) {
   
   // globals
+  var ajaxTimeout, refreshTime;
   var showStations = true;
   var systemMap;
   var bikeTrack;
@@ -71,9 +72,12 @@ var yui = YUI().use(
   var stationDeltas;
   var stationMarkers;
   var userLocation;
-  // Change this to point at either the production or the staging version
-  // of the API service.
-  if (Y.QueryString.parse(window.location.search.slice(1)).cbStage == "true") {
+  var iterations = 0;
+  var bikeMark;
+  
+  var queryValues = Y.QueryString.parse(window.location.search.slice(1));
+
+  if (queryValues.cbStage == "true") {
     cbBaseUrl = "http://staging.citybik.es/";
     cbUrlExt = '';
   } else {
@@ -81,7 +85,14 @@ var yui = YUI().use(
     cbUrlExt = '.json';
   }
 
-  // URL of SF network: http://bayareabikeshare.com/stations/json/
+  function doLog(message) {
+    console.log(new Date().toLocaleString() + ': ' + message);
+  }
+
+  function doNotLog(message) {}
+
+  var logThis = (queryValues.logging == "true") ? doLog : doNotLog;
+  logThis('logging is on');
 
   // some google maps classes and methods
   var  magnifier = {
@@ -118,13 +129,13 @@ var yui = YUI().use(
 	  userLocation = new google.maps.LatLng(position.coords.latitude,
 						position.coords.longitude);
 	  requestSystemList();
-	  console.log('getCurrentPosition returned ' + position.coords.latitude + ', ' +
+	  logThis('getCurrentPosition returned ' + position.coords.latitude + ', ' +
 			position.coords.longitude);
 	  element.setHTML(position.coords.latitude.toFixed(3) +
 		  ', ' + position.coords.longitude.toFixed(3));
 	},
 	function showError(error) {
-	  console.log('getCurrentPosition returned ' + error.code);
+	  logThis('getCurrentPosition returned ' + error.code);
 	  switch(error.code) {
 	    case error.PERMISSION_DENIED:
 	    userLocation = new google.maps.LatLng(38.894, -76.948);
@@ -143,7 +154,7 @@ var yui = YUI().use(
 	  }
 	});
     } else {
-      console.log('no geolocation');
+      logThis('no geolocation');
       userLocation = new google.maps.LatLng(38.894, -76.948);
       requestSystemList();
       element.setHTML('38.894, -76.948');
@@ -157,14 +168,15 @@ var yui = YUI().use(
       (0.000001 * systemList[selectedSystemIndex].lat).toFixed(3) +
       ', ' +
       (0.000001 * systemList[selectedSystemIndex].lng).toFixed(3));
-    systemMap.setCenter(new google.maps.LatLng(( systemList[selectedSystemIndex].lat),
-	      (systemList[selectedSystemIndex].lng)));
+    systemMap.setCenter(new google.maps.LatLng(( 0.000001 * systemList[selectedSystemIndex].lat),
+	      (0.000001 * systemList[selectedSystemIndex].lng)));
     }
 
   function changeSelectedSystem() {
     selectedSystemIndex = parseInt(Y.one('p select#system-list').get('value'));
     prevBikesAtSta.length = 0;
     stationDeltas.length = 0;
+    iterations = 0;
     if (bikeTrack) {
       bikeTrack.clear();
     }
@@ -186,11 +198,10 @@ var yui = YUI().use(
 	  map: systemMap,
 	  icon: {
 	      path: google.maps.SymbolPath.CIRCLE,
-	      // fillColor: index * 0x2050b0 % 0xffff + '',
-	      fillColor: 'red',
+	      fillColor: 'black',
 	      fillOpacity: 0.5,
-	      strokeWeight: 2,
-	      scale: 20
+	      strokeWeight: 1,
+	      scale: 1
 	  },
 	  title: station.name
 	});
@@ -245,7 +256,6 @@ var yui = YUI().use(
     Y.one('#system-list').setHTML(systemOptions);
   }
 
-  var iterations = 0;
   function drawDataBox() {
     var bikeLatAccE6 = 0, bikeLngAccE6 = 0, dockLatAccE6 = 0, dockLngAccE6 = 0,
       bikesAcc = 0, docksAcc = 0, bikeCenter;
@@ -253,7 +263,10 @@ var yui = YUI().use(
     var R = 6371 / 1.609344; // miles
     var maxBikes = 0, bikeOldLatDeg, bikeOldLngDeg, bikeLatAvgDeg, bikeLngAvgDeg;
     var icon, color;
+    var bikon;
     
+    logThis('Iteration: ' + iterations + ' map center: ' + systemMap.getCenter().toString() +
+			' zoom: ' + systemMap.getZoom());
     iterations++;
     if (typeof systemData[0].bikes === 'string') {
       alert('stringto number failed');
@@ -261,7 +274,7 @@ var yui = YUI().use(
       Y.Array.each(systemData, function(station,value){
 	var bikes = station.bikes;
 	var docks = station.free;
-	var delta = stationDeltas[value];
+	var delta = Math.floor(stationDeltas[value]);
 	station.lat *= 0.000001;
 	station.lng *= 0.000001;
 	bikesAcc += bikes;
@@ -274,15 +287,15 @@ var yui = YUI().use(
 	stationMarkers[value].setTitle(iterations + ' ' + station.name +
 	      '\nbikes/docks (\u0394)\n' + station.bikes + '/' + station.free + '(' + delta + ')');
 	icon =  stationMarkers[value].getIcon();
-	icon.scale = (bikes + docks) / 2;
-	icon.strokeWeight = docks / 3;
+	icon.scale = 0.6 *bikes;
+	icon.strokeWeight = docks / 2;
 	icon.fillOpacity = bikes / (bikes + docks),
 	color = (delta > 0) ? 'ff0000' : ((delta === 0) ? '000000' : '00ff00' );
 	icon.strokeColor = color;
 	icon.fillColor = color;
 	icon.fillOpacity = 0.5;
 	stationMarkers[value].setIcon(icon);
-	systemMap.setCenter(newPoint);
+	// systemMap.setCenter(newPoint);
       });
     }
     bikeLatAvgDeg = bikeLatAccE6 / bikesAcc;
@@ -298,10 +311,27 @@ var yui = YUI().use(
     Y.one('#three-two').set('text', ( bikeLatAvgDeg.toFixed(3) +
 	', ' + bikeLngAvgDeg.toFixed(3)));
     var newPoint = new google.maps.LatLng(bikeLatAvgDeg, bikeLngAvgDeg);
+    bikon = {
+      anchor: new google.maps.Point(0,12),
+      origin: new google.maps.Point(24 * (iterations ++ % 16),0),
+      // scaledSize: new google.maps.Size(24, 24),
+      size: new google.maps.Size(24, 24),
+      url: 'images/bike_sprite-24-solid-purple.png'
+    }
+    if (bikeMark) {
+      bikeMark.setMap(null);
+    }
+    bikeMark = new google.maps.Marker({
+      position: newPoint,
+      icon:bikon,
+      map: systemMap,
+      title: "Current centerpoint of bikes"
+    });
     switch (bikeTrack.push(newPoint)) {
 	case 1:
 	  new google.maps.Marker({
 	  position: newPoint,
+	  icon: bikon,
 	  map: systemMap,
 	  title: "Initial Center of Bikes"
 	});
@@ -311,7 +341,7 @@ var yui = YUI().use(
 	case 2:
 	bikeCenter = new google.maps.Polyline({
 	  path: bikeTrack,
-	  strokeColor: '#FF0000',
+	  strokeColor: 'a600d6',
 	  strokeOpacity: 1.0,
 	  strokeWeight: 3
 	});
@@ -336,7 +366,7 @@ var yui = YUI().use(
     if (typeof systemData[0].bikes === 'string') {
       Y.Array.each(systemData, function(station,value){
 	station.bikes = parseInt(station.bikes);
-	station.docks = parseInt(station.free);
+	station.free = parseInt(station.free);
 	station.lat = parseInt(station.lat);
 	station.lng = parseInt(station.lng);
       });
@@ -349,6 +379,7 @@ var yui = YUI().use(
   }
 
   function handleJSONPTimeout() {
+  log('ajax call timed out after ' + ajaxTimeout + ' seconds.');
   }
 
   function prepareJSONPUrl(url, proxy, username) {
@@ -431,6 +462,10 @@ var yui = YUI().use(
     systemList.sort(comparator);
   }
 
+
+  // use this service for info about location someday:
+  // http://askgeo.com/#web-api
+
   function handleSystemList(data) {
     systemList = data;
     Y.Array.each(systemList, function(system, value) {
@@ -438,7 +473,7 @@ var yui = YUI().use(
 					  (0.000001 * system.lng),
 					  userLocation.lat(),
 					  userLocation.lng());
-      console.log(system.distanceAway + 'km from ' + system.name + ' at ' +
+      logThis(system.distanceAway + 'km from ' + system.name + ' at ' +
 	(0.000001 * system.lat) + ', ' +
 	(0.000001 * system.lng) + ', ' +
 	userLocation.lat() + ', ' +
@@ -471,7 +506,7 @@ var yui = YUI().use(
 	removeAttribute('disabled').
 	on('click', function() {
 	  this.setAttribute('disabled');
-	  changeSelectedSystem()
+	  changeSelectedSystem();
 	  setSelectedSystem();
 	  updateSettingsBox();
 	});
