@@ -93,6 +93,11 @@ var yui = YUI().use(
   
   var queryValues = Y.QueryString.parse(window.location.search.slice(1));
 
+  // Z-axis constants
+  var GROUPS = 10000,
+      STATIONS = GROUPS + 1,
+      PATH = GROUPS + 2;
+
   if (queryValues.cbStage && queryValue.cbStage == "true") {
     cbBaseUrl = "http://staging.citybik.es/";
     cbUrlExt = '';
@@ -342,8 +347,11 @@ var yui = YUI().use(
 	thisGroup.docks += systemData[station].free;
 	thisGroup.delta += stationDeltas[index];
       });
-      console.log(Date().toLocaleString() + ': Group ' + thisGroup.name + '\n\tbikes: ' +
-      thisGroup.bikes + '\tdocks: ' + thisGroup.docks + '\tdelta: ' + thisGroup.delta);
+      var info = '<div class="info-window" id="station-id"><p>' +
+		    thisGroup.name +
+		    '</p><p>Bikes: ' + thisGroup.bikes + '&nbsp;&nbsp;Docks: ' + thisGroup.docks +
+		    '</p><p>Trend: ' + thisGroup.delta + '</p></div>'
+      thisGroup.infoWindow.setContent(info);
     });
     // More math
     bikeLatAvgDeg = bikeLatAccE6 / bikesAcc;
@@ -594,22 +602,23 @@ var yui = YUI().use(
 	group.system = systemList[selectedSystemIndex].id;
 	group.stations = [];
 	group.name = 'group no.: ' + groups.length;
-	console.log('creating ' + group.name);
 
 	Y.Array.each(stationMarkers, function(station, value) {
 	  // Check each station to see if it is in the circle
 	  // first check against a bounding box, then do a more precise check
 	  if (google.maps.geometry.poly.containsLocation(station.getPosition(), groupBB)) {
 	    group.stations.push(value);
-	    console.log('Added ' + station.title + ' to ' + group.name);
 	  }
 	});
 
+      group.infoWindow = new google.maps.InfoWindow({
+	position: center
+      });
+
       google.maps.event.addListener(splot, 'mouseover', function() {
-          console.log('this was a mouseover');
+          group.infoWindow.open(systemMap);
       });
       google.maps.event.addListener(splot, 'mouseoff', function() {
-          console.log('this was a mouseoff');
       });
       groups.push(group);
       activeGroups.push(group);
@@ -625,8 +634,7 @@ var yui = YUI().use(
 	  radius: 300,
 	  editable: true,
 	  draggable: true,
-	  zindex: 100000,
-	  title: 'Drag and resize to taste'
+	  zindex: 100000
 	});
 	groupButton.set('value', 'Finish');
 	groupButton.set('text', 'Finish');

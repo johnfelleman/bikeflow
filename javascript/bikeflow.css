@@ -74,3 +74,12 @@
        width: auto;
        font:normal 13px Courier,mono-space;
     }
+
+    div.info-window#station-id {
+      width: 150px;
+      font-size: 12px;
+      line-height: 80%;
+      font-weight: 100;
+      letter-spacing: 0px;
+      height:auto;
+    }
